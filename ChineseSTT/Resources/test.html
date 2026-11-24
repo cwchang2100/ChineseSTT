@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>Speech Recognition Test</title>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 16px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            font-size: 20px;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 12px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>中文語音辨識測試</h2>
+
+    <textarea
+        id="speechInput"
+        placeholder="語音辨識結果將顯示於此">
+    </textarea>
+
+    <br><br>
+
+    <button onclick="submitText()">
+        Submit
+    </button>
+
+    <p id="result"></p>
+
+    <script>
+
+        function submitText() {
+
+            const text =
+                document.getElementById("speechInput").value;
+
+            document.getElementById("result").textContent =
+                text;
+        }
+
+    </script>
+
+</body>
+
+</html>
+

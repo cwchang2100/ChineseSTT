@@ -6,18 +6,70 @@ struct ContentView: View {
 
     @StateObject private var speech = SpeechRecognizer()
 
+    @StateObject private var webController = WebViewController()
+
+    @State private var autoInsert = false
+
+    @State private var urlString = "https://chatgpt.com/"
+
+    //@State private var fieldSelector = "#speechInput"
+    @State private var fieldSelector = "[contenteditable='true']"
+
     var body: some View {
 
         NavigationStack {
 
-            VStack(spacing: 20) {
+            VStack(spacing: 10) {
 
+                // URL address bar
                 HStack {
-                    Text("Language")
-                    Spacer()
-                    Text("繁體中文（台灣）")
-                        .foregroundStyle(.secondary)
+
+                    TextField("URL", text: $urlString)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.URL)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+
+                    Button("Go") {
+                        webController.loadURL(urlString)
+                        //webController.loadLocalHTML()
+                    }
+
+                    Button {
+                        webController.reload()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
                 }
+
+                // Embedded web page
+                WebView(
+                    webView: webController.webView
+                )
+                .frame(maxHeight: .infinity)
+                .border(Color.gray.opacity(0.3))
+
+                Divider()
+
+                // Target HTML field
+                HStack {
+
+                    Text("Selector:")
+
+                    TextField(
+                        "CSS selector",
+                        text: $fieldSelector
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .autocapitalization(.none)
+                    .autocorrectionDisabled()
+                }
+
+                // Automatic text insertion
+                Toggle(
+                    "Auto insert recognized text",
+                    isOn: $autoInsert
+                )
 
                 Toggle(
                     "On-device recognition",
@@ -28,65 +80,75 @@ struct ContentView: View {
                     speech.isRecording
                 )
 
-                if !speech.supportsOnDevice {
-                    Text("On-device recognition is unavailable.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
                 // Recognized text
                 ScrollView {
 
                     Text(
                         speech.transcript.isEmpty
-                        ? "Recognized text will appear here..."
+                        ? "Recognized text..."
                         : speech.transcript
-                    )
-                    .font(.system(size: 22))
-                    .foregroundStyle(
-                        speech.transcript.isEmpty
-                        ? Color.secondary
-                        : Color.primary
                     )
                     .frame(
                         maxWidth: .infinity,
                         alignment: .leading
                     )
-                    .padding()
+                    .padding(8)
                 }
-                .frame(maxHeight: .infinity)
+                .frame(height: 90)
                 .background(
                     Color(uiColor: .secondarySystemBackground)
                 )
-                .cornerRadius(12)
+                .cornerRadius(8)
 
-                // Copy and Clear buttons
-                HStack(spacing: 20) {
+                // Text operation buttons
+                HStack {
+
+                    Button {
+                        Task {
+                            await webController.insertText(
+                                speech.transcript,
+                                selector: fieldSelector
+                            )
+                        }
+                    } label: {
+                        Label(
+                            "Insert",
+                            systemImage: "arrow.up"
+                        )
+                    }
+                    .disabled(speech.transcript.isEmpty)
 
                     Button {
                         UIPasteboard.general.string =
                             speech.transcript
                     } label: {
-                        Label("Copy", systemImage: "doc.on.doc")
+                        Label(
+                            "Copy",
+                            systemImage: "doc.on.doc"
+                        )
                     }
-                    .disabled(speech.transcript.isEmpty)
 
                     Button {
                         speech.clearText()
                     } label: {
-                        Label("Clear", systemImage: "trash")
+                        Label(
+                            "Clear",
+                            systemImage: "trash"
+                        )
                     }
                     .disabled(speech.isRecording)
                 }
                 .buttonStyle(.bordered)
 
-                // Start / Stop button
+                // Recording button
                 Button {
 
                     if speech.isRecording {
+
                         speech.finishRecording()
+
                     } else {
-                        //speech.startRecording()
+
                         Task {
                             await speech.startRecording()
                         }
@@ -94,55 +156,71 @@ struct ContentView: View {
 
                 } label: {
 
-                    VStack(spacing: 10) {
+                    HStack {
 
                         Image(
                             systemName: speech.isRecording
                             ? "stop.fill"
                             : "mic.fill"
                         )
-                        .font(.system(size: 32))
-                        .foregroundStyle(.white)
-                        .frame(width: 75, height: 75)
-                        .background(
-                            speech.isRecording
-                            ? Color.red
-                            : Color.blue
-                        )
-                        .clipShape(Circle())
 
                         Text(
                             speech.isRecording
                             ? "Stop Recording"
                             : "Start Recording"
                         )
-                        .font(.headline)
                     }
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        speech.isRecording
+                        ? Color.red
+                        : Color.blue
+                    )
+                    .cornerRadius(12)
                 }
                 .disabled(!speech.isAuthorized)
 
-                Text(
-                    speech.isRecording
-                    ? "Listening..."
-                    : "Ready"
-                )
-                .foregroundStyle(
-                    speech.isRecording
-                    ? Color.red
-                    : Color.secondary
-                )
-
+                // Error messages
                 if !speech.errorMessage.isEmpty {
+
                     Text(speech.errorMessage)
-                        .font(.caption)
                         .foregroundStyle(.red)
+                        .font(.caption)
+                }
+
+                if !webController.errorMessage.isEmpty {
+
+                    Text(webController.errorMessage)
+                        .foregroundStyle(.red)
+                        .font(.caption)
                 }
             }
-            .padding()
+            .padding(10)
             .navigationTitle("Speech to Text")
+            .navigationBarTitleDisplayMode(.inline)
         }
         .task {
+
+            webController.loadURL(urlString)
+            //webController.loadLocalHTML() // for testing only
+
             await speech.requestAuthorization()
+        }
+        .onChange(of: speech.transcript) { _, newValue in
+
+            if autoInsert && !newValue.isEmpty {
+
+                Task {
+
+                    await webController.insertText(
+                        newValue,
+                        selector: fieldSelector
+                    )
+                }
+            }
         }
     }
 }
