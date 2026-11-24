@@ -60,7 +60,7 @@ class SpeechRecognizer: ObservableObject {
     }
 
     // Start speech recognition
-    func startRecording() {
+    func startRecording() async {
 
         guard isAuthorized else {
             errorMessage = "Permission not granted."
@@ -78,7 +78,8 @@ class SpeechRecognizer: ObservableObject {
             return
         }
 
-        stopRecording()
+        //stopRecording()
+        await stopRecording()
 
         errorMessage = ""
         transcript = ""
@@ -92,8 +93,15 @@ class SpeechRecognizer: ObservableObject {
                 options: []
             )
 
-            try audioSession.setActive(true)
+            //try audioSession.setActive(true)
 
+            let activated = try await audioSession.activate()
+
+            guard activated else {
+                errorMessage = "Failed to activate audio session."
+                return
+            }
+            
             let request = SFSpeechAudioBufferRecognitionRequest()
 
             request.shouldReportPartialResults = true
@@ -109,17 +117,33 @@ class SpeechRecognizer: ObservableObject {
             guard recordingFormat.sampleRate > 0,
                   recordingFormat.channelCount > 0 else {
                 errorMessage = "Invalid microphone audio format."
-                stopRecording()
+                //stopRecording()
+                await stopRecording()
                 return
             }
 
-            inputNode.installTap(
-                onBus: 0,
-                bufferSize: 1024,
-                format: recordingFormat
-            ) { buffer, _ in
+            if #available(iOS 27.0, *) {
 
-                request.append(buffer)
+                try inputNode.installAudioTap(
+                    onBus: 0,
+                    bufferSize: 1024,
+                    format: recordingFormat
+                ) { buffer, _ in
+
+                    let pcmBuffer = AVAudioPCMBuffer(copying: buffer)
+                    request.append(pcmBuffer)
+                }
+
+            } else {
+
+                inputNode.installTap(
+                    onBus: 0,
+                    bufferSize: 1024,
+                    format: recordingFormat
+                ) { buffer, _ in
+
+                    request.append(buffer)
+                }
             }
 
             tapInstalled = true
@@ -155,14 +179,16 @@ class SpeechRecognizer: ObservableObject {
                     }
 
                     if isFinal || errorText != nil {
-                        self.stopRecording()
+                        //self.stopRecording()
+                        await self.stopRecording()
                     }
                 }
             }
 
         } catch {
             errorMessage = error.localizedDescription
-            stopRecording()
+            //stopRecording()
+            await stopRecording()
         }
     }
 
@@ -181,7 +207,7 @@ class SpeechRecognizer: ObservableObject {
     }
 
     // Release recognition resources
-    func stopRecording() {
+    func stopRecording() async {
 
         finishRecording()
 
@@ -189,10 +215,16 @@ class SpeechRecognizer: ObservableObject {
         recognitionTask = nil
         recognitionRequest = nil
 
-        try? AVAudioSession.sharedInstance().setActive(
-            false,
-            options: .notifyOthersOnDeactivation
-        )
+        //try? AVAudioSession.sharedInstance().setActive(
+        //    false,
+        //    options: .notifyOthersOnDeactivation
+        //)
+        do {
+            _ = try await AVAudioSession.sharedInstance().deactivate()
+        } catch {
+            print("Deactivation error: \(error)")
+        }
+        
     }
 
     func clearText() {

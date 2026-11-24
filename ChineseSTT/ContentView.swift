@@ -86,7 +86,10 @@ struct ContentView: View {
                     if speech.isRecording {
                         speech.finishRecording()
                     } else {
-                        speech.startRecording()
+                        //speech.startRecording()
+                        Task {
+                            await speech.startRecording()
+                        }
                     }
 
                 } label: {
